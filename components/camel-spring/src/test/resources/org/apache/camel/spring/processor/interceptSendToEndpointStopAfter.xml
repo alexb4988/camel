@@ -16,42 +16,36 @@
     limitations under the License.
 -->
 <beans xmlns="http://www.springframework.org/schema/beans"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
        http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd
     ">
 
-	<!-- START SNIPPET: e1 -->
-	<camelContext xmlns="http://camel.apache.org/schema/spring">
+    <!-- START SNIPPET: e1 -->
+    <camelContext xmlns="http://camel.apache.org/schema/spring">
 
-		<!-- we intercept by endpoint, that means that whenever an exchange is 
-			about to be sent to this endpoint, its intercepted and routed with before 
-			route beforehand afterwards its send to the original intended destination and then intercepted with after route. 
-			So this is kinda AOP before and after. That means mock:foo will receive the message 
-			(Bye World). -->
-		<interceptSendToEndpoint uri="mock:foo">
-			<before>
-				<to uri="mock:detour" />
-				<transform>
-					<constant>Bye World</constant>
-				</transform>
-			</before>
-			<after>
-				<transform>
-					<constant>Bye World</constant>
-				</transform>
-				<to uri="mock:after" />
-			</after>
-		</interceptSendToEndpoint>
+        <!-- since we set the skipSendToOriginalEndpoint attribute to true we instruct
+             Camel to skip sending the exchange to the original intended destination.
+             That means that mock:foo will NOT receive the message, but the message
+             is skipped and continued in the original route, so mock:result will receive
+             the message. -->
+        <interceptSendToEndpoint uri="mock:foo">
+        	<before>
+            	<to uri="mock:detour"/>
+            	<stop />
+        	</before>
+            <after>
+        		<to uri="mock:after"/>
+        	</after>
+        </interceptSendToEndpoint>
 
-		<route>
-			<from uri="direct:first" />
-			<to uri="mock:bar" />
-			<to uri="mock:foo" />
-			<to uri="mock:result" />
-		</route>
-	</camelContext>
-	<!-- END SNIPPET: e1 -->
+        <route>
+            <from uri="direct:third"/>
+            <to uri="mock:foo"/>
+            <to uri="mock:result"/>
+        </route>
+    </camelContext>
+    <!-- END SNIPPET: e1 -->
 
 </beans>

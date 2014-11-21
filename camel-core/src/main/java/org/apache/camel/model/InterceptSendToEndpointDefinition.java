@@ -16,11 +16,15 @@
  */
 package org.apache.camel.model;
 
+import java.util.ArrayList;
 import java.util.List;
+
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlTransient;
 
 import org.apache.camel.CamelContext;
 import org.apache.camel.Endpoint;
@@ -53,6 +57,12 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
     private String uri;
     @XmlAttribute
     private Boolean skipSendToOriginalEndpoint;
+    @XmlElement
+    private BeforeDefinition beforeDefinition;
+    @XmlElement
+    private AfterDefinition afterDefinition;
+    @XmlTransient
+    private WhenDefinition whenDefinition;
 
     public InterceptSendToEndpointDefinition() {
     }
@@ -85,13 +95,18 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
     public boolean isTopLevelOnly() {
         return true;
     }
-
+    
     @Override
     public Processor createProcessor(final RouteContext routeContext) throws Exception {
-        // create the detour
-        final Processor detour = this.createChildProcessor(routeContext, true);
+        
+    	createProcessors(routeContext);
+    	
+        final Processor beforeProcessor = beforeDefinition != null ? createProcessor(routeContext, beforeDefinition) : 
+        	(whenDefinition != null ? createProcessor(routeContext, whenDefinition) : 
+        		(afterDefinition == null ? createChildProcessor(routeContext, false) : null));
+        final Processor afterProcessor = afterDefinition != null ? createProcessor(routeContext, afterDefinition) : null;
 
-        // register endpoint callback so we can proxy the endpoint
+    	// register endpoint callback so we can proxy the endpoint
         routeContext.getCamelContext().addRegisterEndpointCallback(new EndpointStrategy() {
             public Endpoint registerEndpoint(String uri, Endpoint endpoint) {
                 if (endpoint instanceof InterceptSendToEndpoint) {
@@ -102,7 +117,9 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
                     // should be false by default
                     boolean skip = isSkipSendToOriginalEndpoint();
                     InterceptSendToEndpoint proxy = new InterceptSendToEndpoint(endpoint, skip);
-                    proxy.setDetour(detour);
+                    
+                    proxy.setBefore(beforeProcessor);
+                    proxy.setAfter(afterProcessor);
                     return proxy;
                 } else {
                     // no proxy so return regular endpoint
@@ -119,7 +136,7 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
         List<ProcessorDefinition<?>> outputs = route.getOutputs();
         outputs.remove(this);
 
-        return new InterceptEndpointProcessor(uri, detour);
+        return new InterceptEndpointProcessor(uri, null);
     }
 
     /**
@@ -166,7 +183,23 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
         setSkipSendToOriginalEndpoint(Boolean.TRUE);
         return this;
     }
+    
+    public InterceptSendToEndpointDefinition after() {
+        popBlock();
+        AfterDefinition answer = new AfterDefinition();
+        addOutput(answer);
+        pushBlock(answer);
+        return this;
+    }
 
+    public InterceptSendToEndpointDefinition before() {
+        popBlock();
+        BeforeDefinition answer = new BeforeDefinition();
+        addOutput(answer);
+        pushBlock(answer);
+        return this;
+    }
+    
     /**
      * This method is <b>only</b> for handling some post configuration
      * that is needed since this is an interceptor, and we have to do
@@ -187,7 +220,8 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
         if (first instanceof WhenDefinition && !(first instanceof WhenSkipSendToEndpointDefinition)) {
             WhenDefinition when = (WhenDefinition) first;
 
-            // create a copy of when to use as replacement
+            List<ProcessorDefinition<?>> newOutputs = new ArrayList<ProcessorDefinition<?>>();
+
             WhenSkipSendToEndpointDefinition newWhen = new WhenSkipSendToEndpointDefinition();
             newWhen.setExpression(when.getExpression());
             newWhen.setId(when.getId());
@@ -196,16 +230,34 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
             newWhen.setOtherAttributes(when.getOtherAttributes());
             newWhen.setDescription(when.getDescription());
 
-            // move this outputs to the when, expect the first one
-            // as the first one is the interceptor itself
+            newOutputs.add(newWhen);
+
+            // move this outputs to the when, expect the first one and after
+            // as the first one is the interceptor itself 
             for (int i = 1; i < outputs.size(); i++) {
                 ProcessorDefinition<?> out = outputs.get(i);
-                newWhen.addOutput(out);
+                if (!(out instanceof AfterDefinition)) {
+                    newWhen.addOutput(out);
+                } else {
+                    newOutputs.add(out);
+                }
             }
             // remove the moved from the original output, by just keeping the first one
             clearOutput();
-            outputs.add(newWhen);
+            outputs.addAll(newOutputs);
         }
+    }
+    
+    private void createProcessors(RouteContext routeContext) {
+    	for (ProcessorDefinition<?> outPut : getOutputs()) {
+    		if (outPut instanceof BeforeDefinition) {
+    			beforeDefinition = (BeforeDefinition) outPut;
+    		} else if (outPut instanceof AfterDefinition) {
+    			afterDefinition = (AfterDefinition) outPut;
+    		} else if (outPut instanceof WhenSkipSendToEndpointDefinition) {
+    			whenDefinition = (WhenSkipSendToEndpointDefinition) outPut;
+    		}
+    	}
     }
 
     public Boolean getSkipSendToOriginalEndpoint() {
@@ -227,4 +279,21 @@ public class InterceptSendToEndpointDefinition extends OutputDefinition<Intercep
     public void setUri(String uri) {
         this.uri = uri;
     }
+
+	public BeforeDefinition getBeforeDefinition() {
+		return beforeDefinition;
+	}
+
+	public void setBeforeDefinition(BeforeDefinition beforeDefinition) {
+		this.beforeDefinition = beforeDefinition;
+	}
+
+	public AfterDefinition getAfterDefinition() {
+		return afterDefinition;
+	}
+
+	public void setAfterDefinition(AfterDefinition afterDefinition) {
+		this.afterDefinition = afterDefinition;
+	}
+    
 }

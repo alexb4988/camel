@@ -23,20 +23,20 @@ import static org.apache.camel.spring.processor.SpringTestHelper.createSpringCam
 /**
  * @version 
  */
-public class SpringInterceptSendToEndpointTest extends ContextTestSupport {
+public class SpringInterceptSendToEndpointStopAfetrTest extends ContextTestSupport {
 
     protected CamelContext createCamelContext() throws Exception {
-        return createSpringCamelContext(this, "org/apache/camel/spring/processor/interceptSendToEndpoint.xml");
+        return createSpringCamelContext(this, "org/apache/camel/spring/processor/interceptSendToEndpointStopAfter.xml");
     }
 
-    public void testInterceptEndpoint() throws Exception {
-        getMockEndpoint("mock:bar").expectedBodiesReceived("Hello World");
+    public void testInterceptEndpointSkip() throws Exception {
         getMockEndpoint("mock:detour").expectedBodiesReceived("Hello World");
-        getMockEndpoint("mock:foo").expectedBodiesReceived("Bye World");
-        getMockEndpoint("mock:result").expectedBodiesReceived("Bye World");
-        getMockEndpoint("mock:after").expectedBodiesReceived("Bye World");
-        
-        template.sendBody("direct:first", "Hello World");
+        // mock:foo is skipped so no messages received
+        getMockEndpoint("mock:foo").expectedMessageCount(0);
+        getMockEndpoint("mock:result").expectedMessageCount(0);
+        getMockEndpoint("mock:after").expectedMessageCount(0);
+
+        template.sendBody("direct:third", "Hello World");
 
         assertMockEndpointsSatisfied();
     }

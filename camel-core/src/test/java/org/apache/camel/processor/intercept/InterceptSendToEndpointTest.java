@@ -31,7 +31,7 @@ public class InterceptSendToEndpointTest extends ContextTestSupport {
         return false;
     }
 
-    public void testInterceptEndpoint() throws Exception {
+    public void testInterceptEndpointDefault() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
             public void configure() throws Exception {
@@ -64,7 +64,33 @@ public class InterceptSendToEndpointTest extends ContextTestSupport {
 
         assertMockEndpointsSatisfied();
     }
+    
+    public void testInterceptEndpoint() throws Exception {
+        context.addRoutes(new RouteBuilder() {
 
+            @Override
+            public void configure() throws Exception {
+                interceptSendToEndpoint("mock:foo").before().to("mock:detour").after().transform(constant("Bye World"));
+                
+                from("direct:first")
+                .to("mock:bar")
+                .to("mock:foo")
+                .to("mock:result");
+
+            }
+        });
+        context.start();
+
+        getMockEndpoint("mock:bar").expectedBodiesReceived("Hello World");
+        getMockEndpoint("mock:detour").expectedBodiesReceived("Hello World");
+        getMockEndpoint("mock:foo").expectedBodiesReceived("Hello World");
+        getMockEndpoint("mock:result").expectedBodiesReceived("Bye World");
+
+        template.sendBody("direct:first", "Hello World");
+        
+        assertMockEndpointsSatisfied();
+    }
+    
     public void testInterceptEndpointWithPredicate() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
@@ -96,7 +122,36 @@ public class InterceptSendToEndpointTest extends ContextTestSupport {
 
         assertMockEndpointsSatisfied();
     }
+    
+    public void testInterceptEndpointWithPredicateAndAfter() throws Exception {
+        context.addRoutes(new RouteBuilder() {
+            @Override
+            public void configure() throws Exception {
+                interceptSendToEndpoint("mock:foo")
+                .when(body().isEqualTo("Hello World")).to("mock:detour")
+                .after().transform(constant("Bye World")).to("mock:after");
 
+                from("direct:second")
+                    .to("mock:bar")
+                    .to("mock:foo")
+                    .to("mock:result");
+
+            }
+        });
+        context.start();
+
+        getMockEndpoint("mock:bar").expectedBodiesReceived("Hello World", "Hi");
+        getMockEndpoint("mock:detour").expectedBodiesReceived("Hello World");
+        getMockEndpoint("mock:foo").expectedBodiesReceived("Hello World", "Hi");
+        getMockEndpoint("mock:result").expectedBodiesReceived("Bye World", "Hi");
+        getMockEndpoint("mock:after").expectedBodiesReceived("Bye World");
+
+        template.sendBody("direct:second", "Hello World");
+        template.sendBody("direct:second", "Hi");
+
+        assertMockEndpointsSatisfied();
+    }
+    
     public void testInterceptEndpointStop() throws Exception {
         context.addRoutes(new RouteBuilder() {
             @Override
@@ -178,6 +233,30 @@ public class InterceptSendToEndpointTest extends ContextTestSupport {
         template.sendBody("direct:start", "Hello World");
 
         assertMockEndpointsSatisfied();
+    }
+
+    public void testInterceptEndpointStopWithAfter() throws Exception {
+    	context.addRoutes(new RouteBuilder() {
+    		@Override
+    		public void configure() throws Exception {
+    			interceptSendToEndpoint("direct:start").before()
+    			.to("mock:detour").stop().after().to("mock:after");
+    			
+    			from("direct:start")
+    			.to("mock:foo")
+    			.to("mock:result");
+    		}
+    	});
+    	context.start();
+    	
+    	getMockEndpoint("mock:detour").expectedMessageCount(1);
+    	getMockEndpoint("mock:foo").expectedMessageCount(0);
+    	getMockEndpoint("mock:result").expectedMessageCount(0);
+    	getMockEndpoint("mock:after").expectedMessageCount(0);
+    	
+    	template.sendBody("direct:start", "Hello World");
+    	
+    	assertMockEndpointsSatisfied();
     }
 
     public void testInterceptEndpointOnce() throws Exception {

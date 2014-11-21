@@ -16,27 +16,30 @@
  */
 package org.apache.camel.spring.processor;
 
-import org.apache.camel.CamelContext;
-import org.apache.camel.ContextTestSupport;
 import static org.apache.camel.spring.processor.SpringTestHelper.createSpringCamelContext;
 
+import org.apache.camel.CamelContext;
+import org.apache.camel.ContextTestSupport;
+
 /**
- * @version 
+ * @version
+ *
  */
-public class SpringInterceptSendToEndpointTest extends ContextTestSupport {
+public class SpringInterceptSendToEndpointWhenAfterTest extends ContextTestSupport {
 
     protected CamelContext createCamelContext() throws Exception {
-        return createSpringCamelContext(this, "org/apache/camel/spring/processor/interceptSendToEndpoint.xml");
+        return createSpringCamelContext(this, "org/apache/camel/spring/processor/interceptSendToEndpointWhenAfter.xml");
     }
 
-    public void testInterceptEndpoint() throws Exception {
-        getMockEndpoint("mock:bar").expectedBodiesReceived("Hello World");
+    public void testInterceptEndpointWhen() throws Exception {
+        getMockEndpoint("mock:bar").expectedBodiesReceived("Hello World", "Hi");
         getMockEndpoint("mock:detour").expectedBodiesReceived("Hello World");
-        getMockEndpoint("mock:foo").expectedBodiesReceived("Bye World");
-        getMockEndpoint("mock:result").expectedBodiesReceived("Bye World");
+        getMockEndpoint("mock:foo").expectedBodiesReceived("Bye World", "Hi");
+        getMockEndpoint("mock:result").expectedBodiesReceived("Bye World", "Hi");
         getMockEndpoint("mock:after").expectedBodiesReceived("Bye World");
-        
-        template.sendBody("direct:first", "Hello World");
+
+        template.sendBody("direct:second", "Hello World");
+        template.sendBody("direct:second", "Hi");
 
         assertMockEndpointsSatisfied();
     }
